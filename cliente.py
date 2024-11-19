@@ -2,112 +2,131 @@ import Pyro4
 import os
 
 # Classe para receber mensagens do servidor
-
 @Pyro4.expose
 class ChatClient:
-    def __init__(self, UserLogin):
-        self.userLogin = UserLogin
-        
+    def __init__(self, user_login):
+        self.user_login = user_login
+
     def receive_message(self, message):
         """Recebe uma mensagem do servidor."""
-        print(f"Nova mensagem recebida: {message}")
+        print(message)
 
-# Fazendo conexão do cliente ao server
+# Conexão do cliente ao servidor
 ns = Pyro4.locateNS()
-server = Pyro4.Proxy(ns.lookup("data.analysis1")) 
+server = Pyro4.Proxy(ns.lookup("chat.server"))
 
-ListInfo = ['UserLogin','UserName','PassWord']
-LoginCheck = False
-Sair = False  
-user_info = {}  
-opcao = 0
-def executar_tarefa(servidor, funcao, *args):
+user_fields = ['UserLogin', 'UserName', 'PassWord']
+user_info = {}
+option = 0
+
+def execute_task(server, function_name, *args):
     try:
-        return getattr(servidor, funcao)(*args)
+        return getattr(server, function_name)(*args)
     except Pyro4.errors.CommunicationError:
-        print(f"Servidor para {funcao} falhou. Tentando outro servidor...")
-        # Tenta encontrar outro servidor com a mesma função
+        print(f"Falha na comunicação com o servidor ao executar {function_name}.")
         return None
-    
-def login_validation():
-    opcao = int(input(' 1 : Fazer Login\n 2 : Criar Conta\n 3 : Sair Do Chat \n Escolha uma opção: '))
+
+def validate_login():
+    option = int(input('1: Fazer Login\n2: Criar Conta\n3: Sair do Chat\nEscolha uma opção: '))
     os.system('clear')
-    if opcao == 1:
-        userLogin = input('Informe o UserLogin: ')
+    if option == 1:
+        user_login = input('Informe o UserLogin: ')
         password = input('Informe a senha: ')
-        validacao = executar_tarefa(server, 'login_check', userLogin, password)
+        is_valid = execute_task(server, 'verify_login', user_login, password)
         
-        if validacao:
+        if is_valid:
             print('Login feito com sucesso!')
-            resposta = executar_tarefa(server, 'get_username', userLogin)
-            return resposta
+            user_data = execute_task(server, 'get_user_info', user_login)
+            return user_data
         else:
-            print('Senha ou Usuario invalido! Tente novamente.')
-            return login_validation()  # Retorna o valor da chamada recursiva
-    
-    elif opcao == 2:
+            print('Senha ou usuário inválidos! Tente novamente.')
+            return validate_login()
+    elif option == 2:
         user_info = {}
-        for info in ListInfo:
-            valor = input(f'Informe {info}: ')
-            user_info[info] = valor
+        for field in user_fields:
+            user_info[field] = input(f'Informe {field}: ')
         
-        resposta = executar_tarefa(server, 'insert_User', user_info)
-        if not resposta:
-            print('UserLogin já existente! Tente novamente.')
-            return login_validation()  # Retorna o valor da chamada recursiva
+        response = execute_task(server, 'register_user', user_info)
+        if response == 'Usuário já existe!':
+            print(response)
+            return validate_login()
         else:
-            print('Conta criada com sucesso!')
-            return login_validation()  # Continua o fluxo chamando a função novamente
-    
-    elif opcao == 3:
+            print(response)
+            return validate_login()
+    elif option == 3:
         print('Saindo do chat...')
-        return None  # Encerra o programa
-    
+        return None
     else:
         print('Escolha uma opção válida.')
-        return login_validation()  # Retorna o valor da chamada recursiva
+        return validate_login()
 
-def see_all_users():
-    value = server.all_users_connected()
-    return value
+def list_connected_users():
+    return server.get_all_connected_users()
 
-def send_for_all():
-    print()
-
-def send_for_user(client_login,client_name):
-    opcao = input(' 1 - Ver Usuarios conectados\n 2 - Enviar Mensagem\n 3 - Voltar : ')
+def send_to_all(client_login, client_name):
+    option = input('1: Enviar Mensagem e Receber\n2: Voltar\nEscolha uma opção: ')
     os.system('clear')
-    if opcao == '1':
-        users_conneted = see_all_users()
-        print(users_conneted)
-        send_for_user(client_login,client_name)
-    elif opcao == '2':
-        print()
-        send_for_user(client_login,client_name)
-    elif opcao == '3':
-        pass
+    if option == '1':
+        server.update_chat_status(client_login, False)
+        print('Para sair deste modo de chat, digite "sair".')
+        while True:
+            message = input('Digite sua mensagem: ')
+            if message.lower() == 'sair':
+                server.update_chat_status(client_login, None)
+                break
+            else:
+                server.send_message(client_login, client_name, None, message)
+    elif option == '2':
+        return
     else:
-        print('Escolha uma opcao valida!')
-        send_for_user(client_login,client_name)
+        send_to_all(client_login, client_name)
 
+def send_to_user(client_login, client_name):
+    option = input('1: Ver Usuários Conectados\n2: Enviar Mensagem\n3: Voltar\nEscolha uma opção: ')
+    os.system('clear')
+    if option == '1':
+        connected_users = list_connected_users()
+        print(connected_users)
+        send_to_user(client_login, client_name)
+    elif option == '2':
+        server.update_chat_status(client_login, True)
+        recipient_name = input('Informe o usuário para enviar uma mensagem: ')
+        print('Para sair deste modo de chat, digite "sair".')
+        while True:
+            message = input(f'Digite sua mensagem para {recipient_name}: ')
+            if message.lower() == 'sair':
+                server.update_chat_status(client_login, None)
+                break
+            else:
+                server.send_message(client_login, client_name, recipient_name, message)
+    elif option == '3':
+        return
+    else:
+        print('Escolha uma opção válida!')
+        send_to_user(client_login, client_name)
 
-def start_comunication(client_login,client_name):
+def start_communication(client_login, client_name):
     while True:
-        opcao = input(' 1 - Mensagem Geral\n 2 - Mesagem Usuario\n 3 - Sair : ')
+        option = input('1: Mensagem Geral\n2: Mensagem para Usuário\n3: Sair\nEscolha uma opção: ')
         os.system('clear')
-        if opcao == '1':
-            send_for_all()
-        elif opcao == '2':
-            send_for_user(client_login,client_name)
-        elif opcao == '3':
+        if option == '1':
+            send_to_all(client_login, client_name)
+        elif option == '2':
+            send_to_user(client_login, client_name)
+        elif option == '3':
+            daemon.shutdown()
             break
         else:
-            print('Escolha uma opcao valida!')
+            print('Escolha uma opção válida!')
 
-user_values = login_validation()
-if user_values is not None:
-    client = ChatClient(user_values[0])
+user_data = validate_login()
+
+if user_data is not None:
+    client = ChatClient(user_data[0])
     daemon = Pyro4.Daemon()  # Cria um daemon para o cliente
     client_uri = daemon.register(client)  # Registra o cliente
-    server.register_client(client_uri,user_values[0])  # Registra o cliente no servidor
-    start_comunication(user_values[0],user_values[1])
+    server.register_client(client_uri, user_data[0])  # Registra o cliente no servidor
+    
+    import threading
+    threading.Thread(target=start_communication, args=(user_data[0], user_data[1]), daemon=True).start()
+    daemon.requestLoop()
