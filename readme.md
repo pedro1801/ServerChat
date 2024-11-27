@@ -36,7 +36,7 @@ $ pip install Pyro4
 
 1. **Inicialize o Servidor:**
    1. **Inicialize o Pyro4:**
-        No terminal, execute o comando python -m Pyro4.naming para iniciar o servidor:
+        No terminal, execute o comando python -m Pyro4.naming para iniciar o servidor, ou se preferir fazer uma conexão remota use o argumento pyro4-ns -n "ipHost" para poder conectar diferentes máquinas, não esqueça de passar o argumento host="ipHost" dentro da classe Daemon e dentro da função locateNS.
    2. **Como iniciar o server**
         No terminal, execute o script `server.py` para iniciar o servidor:
 
